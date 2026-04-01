@@ -101,6 +101,14 @@ export default function Index() {
     setCameraReady(false);
   }, []);
 
+  const loopFnRef = useRef<(() => void) | null>(null);
+
+  const resumeLoop = useCallback(() => {
+    if (loopFnRef.current) {
+      animFrameRef.current = requestAnimationFrame(loopFnRef.current);
+    }
+  }, []);
+
   const startSession = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -108,6 +116,8 @@ export default function Index() {
       await initFaceLandmarker();
       blinkStateRef.current = createBlinkState();
       startTimeRef.current = Date.now();
+      pausedMsRef.current = 0;
+      hiddenAtRef.current = 0;
       lastAlertRef.current = {};
       setBlinkCount(0);
       setBlinkRate(0);
@@ -117,8 +127,11 @@ export default function Index() {
       setNotifications([]);
       setSummary(null);
       setIsRunning(true);
+      isRunningRef.current = true;
 
       const loop = () => {
+        if (document.hidden) return;
+
         const video = videoRef.current;
         if (!video || video.readyState < 2) {
           animFrameRef.current = requestAnimationFrame(loop);
