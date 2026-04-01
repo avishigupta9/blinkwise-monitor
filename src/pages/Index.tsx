@@ -27,6 +27,10 @@ export default function Index() {
   const startTimeRef = useRef<number>(0);
   const lastAlertRef = useRef<Record<string, number>>({});
 
+  const pausedMsRef = useRef<number>(0);
+  const hiddenAtRef = useRef<number>(0);
+  const isRunningRef = useRef(false);
+
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
