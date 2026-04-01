@@ -43,14 +43,35 @@ export default function Index() {
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [showSummary, setShowSummary] = useState(false);
 
-  // Timer
+  // Timer (shows observed time, excluding paused)
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      const total = Date.now() - startTimeRef.current - pausedMsRef.current;
+      setElapsed(Math.floor(total / 1000));
     }, 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
+
+  // Pause detection when tab is hidden
+  useEffect(() => {
+    const handler = () => {
+      if (!isRunningRef.current) return;
+      if (document.hidden) {
+        hiddenAtRef.current = Date.now();
+        cancelAnimationFrame(animFrameRef.current);
+      } else {
+        if (hiddenAtRef.current > 0) {
+          pausedMsRef.current += Date.now() - hiddenAtRef.current;
+          hiddenAtRef.current = 0;
+        }
+        // Resume loop — re-dispatch from startSession's loop ref
+        resumeLoop();
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
