@@ -27,6 +27,10 @@ export default function Index() {
   const startTimeRef = useRef<number>(0);
   const lastAlertRef = useRef<Record<string, number>>({});
 
+  const pausedMsRef = useRef<number>(0);
+  const hiddenAtRef = useRef<number>(0);
+  const isRunningRef = useRef(false);
+
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -39,14 +43,42 @@ export default function Index() {
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [showSummary, setShowSummary] = useState(false);
 
-  // Timer
+  const loopFnRef = useRef<(() => void) | null>(null);
+
+  const resumeLoop = useCallback(() => {
+    if (loopFnRef.current) {
+      animFrameRef.current = requestAnimationFrame(loopFnRef.current);
+    }
+  }, []);
+
+  // Timer (shows observed time, excluding paused)
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      const total = Date.now() - startTimeRef.current - pausedMsRef.current;
+      setElapsed(Math.floor(total / 1000));
     }, 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
+
+  // Pause detection when tab is hidden
+  useEffect(() => {
+    const handler = () => {
+      if (!isRunningRef.current) return;
+      if (document.hidden) {
+        hiddenAtRef.current = Date.now();
+        cancelAnimationFrame(animFrameRef.current);
+      } else {
+        if (hiddenAtRef.current > 0) {
+          pausedMsRef.current += Date.now() - hiddenAtRef.current;
+          hiddenAtRef.current = 0;
+        }
+        resumeLoop();
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [resumeLoop]);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
@@ -83,6 +115,8 @@ export default function Index() {
       await initFaceLandmarker();
       blinkStateRef.current = createBlinkState();
       startTimeRef.current = Date.now();
+      pausedMsRef.current = 0;
+      hiddenAtRef.current = 0;
       lastAlertRef.current = {};
       setBlinkCount(0);
       setBlinkRate(0);
@@ -92,8 +126,11 @@ export default function Index() {
       setNotifications([]);
       setSummary(null);
       setIsRunning(true);
+      isRunningRef.current = true;
 
       const loop = () => {
+        if (document.hidden) return;
+
         const video = videoRef.current;
         if (!video || video.readyState < 2) {
           animFrameRef.current = requestAnimationFrame(loop);
@@ -132,6 +169,8 @@ export default function Index() {
         animFrameRef.current = requestAnimationFrame(loop);
       };
 
+      loopFnRef.current = loop;
+
       // Small delay for camera warmup
       setTimeout(() => {
         animFrameRef.current = requestAnimationFrame(loop);
@@ -144,8 +183,10 @@ export default function Index() {
   const stopSession = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
     setIsRunning(false);
+    isRunningRef.current = false;
+    loopFnRef.current = null;
 
-    const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now());
+    const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), pausedMsRef.current);
     setSummary(s);
     setShowSummary(true);
 
