@@ -157,6 +157,8 @@ export default function Index() {
         animFrameRef.current = requestAnimationFrame(loop);
       };
 
+      loopFnRef.current = loop;
+
       // Small delay for camera warmup
       setTimeout(() => {
         animFrameRef.current = requestAnimationFrame(loop);
