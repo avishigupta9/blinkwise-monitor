@@ -43,6 +43,14 @@ export default function Index() {
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [showSummary, setShowSummary] = useState(false);
 
+  const loopFnRef = useRef<(() => void) | null>(null);
+
+  const resumeLoop = useCallback(() => {
+    if (loopFnRef.current) {
+      animFrameRef.current = requestAnimationFrame(loopFnRef.current);
+    }
+  }, []);
+
   // Timer (shows observed time, excluding paused)
   useEffect(() => {
     if (!isRunning) return;
@@ -65,7 +73,6 @@ export default function Index() {
           pausedMsRef.current += Date.now() - hiddenAtRef.current;
           hiddenAtRef.current = 0;
         }
-        // Resume loop — re-dispatch from startSession's loop ref
         resumeLoop();
       }
     };
@@ -99,14 +106,6 @@ export default function Index() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraReady(false);
-  }, []);
-
-  const loopFnRef = useRef<(() => void) | null>(null);
-
-  const resumeLoop = useCallback(() => {
-    if (loopFnRef.current) {
-      animFrameRef.current = requestAnimationFrame(loopFnRef.current);
-    }
   }, []);
 
   const startSession = useCallback(async () => {
