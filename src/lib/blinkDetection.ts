@@ -170,10 +170,12 @@ export interface SessionSummary {
   interpretation: string;
 }
 
-export function generateSummary(state: BlinkState, startTime: number, endTime: number): SessionSummary {
-  const duration = (endTime - startTime) / 1000;
+export function generateSummary(state: BlinkState, startTime: number, endTime: number, pausedMs = 0): SessionSummary {
+  const observedMs = Math.max(1000, endTime - startTime - pausedMs);
+  const duration = observedMs / 1000;
   const totalBlinks = state.blinkCount;
-  const avgRate = duration > 0 ? (totalBlinks / duration) * 60 : 0;
+  const observedMin = duration / 60;
+  const avgRate = observedMin > 0 ? totalBlinks / observedMin : 0;
 
   const rates = state.frames
     .filter((f) => f.rollingBlinkRate > 0)
@@ -185,10 +187,14 @@ export function generateSummary(state: BlinkState, startTime: number, endTime: n
   const belowHealthy = rates.filter((r) => r < 8).length;
   const percentBelowHealthy = rates.length > 0 ? (belowHealthy / rates.length) * 100 : 0;
 
-  const interpretation =
-    percentBelowHealthy > 30
-      ? `Your blink rate remained below typical resting levels for ${percentBelowHealthy.toFixed(0)}% of the session. Research indicates reduced blinking during prolonged screen exposure contributes to tear film instability and symptoms of digital eye strain.`
-      : `Your blink rate was within healthy ranges for most of the session. Continue maintaining good blinking habits during screen use.`;
+  let interpretation: string;
+  if (avgRate < 8) {
+    interpretation = `Low blink rate during observed screen time (${avgRate.toFixed(1)} blinks/min average). Research commonly reports spontaneous blink rate drops during digital tasks, with normal resting rates typically between 12–15 blinks/min. Reduced blinking is associated with tear film instability and dry eye symptoms. Consider regular blink reminders and short breaks. This is behavioral feedback, not a diagnosis.`;
+  } else if (avgRate > 25) {
+    interpretation = `Elevated blink rate during observed screen time (${avgRate.toFixed(1)} blinks/min average). This can occur with ocular discomfort, fatigue, or concentration shifts. Review your comfort, lighting, and break frequency. This is behavioral feedback, not a diagnosis.`;
+  } else {
+    interpretation = `Your blink rate stayed within a commonly cited resting range for adults (${avgRate.toFixed(1)} blinks/min average). During screen use, rates often decrease, so maintaining this range is generally favorable. Continue practicing good blinking habits. This is behavioral feedback, not a diagnosis.`;
+  }
 
   return { duration, totalBlinks, avgRate, minRate, maxRate, percentBelowHealthy, interpretation };
 }

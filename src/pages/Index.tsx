@@ -171,8 +171,10 @@ export default function Index() {
   const stopSession = useCallback(() => {
     cancelAnimationFrame(animFrameRef.current);
     setIsRunning(false);
+    isRunningRef.current = false;
+    loopFnRef.current = null;
 
-    const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now());
+    const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), pausedMsRef.current);
     setSummary(s);
     setShowSummary(true);
 
