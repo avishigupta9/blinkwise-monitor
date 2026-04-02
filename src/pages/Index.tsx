@@ -181,7 +181,7 @@ export default function Index() {
     }
   }, [startCamera]);
 
-  const stopSession = useCallback(() => {
+  const stopSession = useCallback(async () => {
     cancelAnimationFrame(animFrameRef.current);
     setIsRunning(false);
     isRunningRef.current = false;
@@ -190,6 +190,17 @@ export default function Index() {
     const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), pausedMsRef.current);
     setSummary(s);
     setShowSummary(true);
+
+    // Save session report to database
+    await supabase.from("session_reports").insert({
+      duration: s.duration,
+      total_blinks: s.totalBlinks,
+      avg_rate: s.avgRate,
+      min_rate: s.minRate,
+      max_rate: s.maxRate,
+      percent_below_healthy: s.percentBelowHealthy,
+      interpretation: s.interpretation,
+    });
 
     stopCamera();
   }, [stopCamera]);
