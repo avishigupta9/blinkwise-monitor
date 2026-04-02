@@ -163,7 +163,9 @@ export default function Index() {
           }
         }
 
-        animFrameRef.current = requestAnimationFrame(loop);
+        if (!document.hidden) {
+          animFrameRef.current = requestAnimationFrame(loop);
+        }
       };
 
       loopFnRef.current = loop;
