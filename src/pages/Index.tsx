@@ -116,8 +116,6 @@ export default function Index() {
       await initFaceLandmarker();
       blinkStateRef.current = createBlinkState();
       startTimeRef.current = Date.now();
-      pausedMsRef.current = 0;
-      hiddenAtRef.current = 0;
       lastAlertRef.current = {};
       setBlinkCount(0);
       setBlinkRate(0);
@@ -130,11 +128,9 @@ export default function Index() {
       isRunningRef.current = true;
 
       const loop = () => {
-        if (document.hidden) return;
-
         const video = videoRef.current;
         if (!video || video.readyState < 2) {
-          animFrameRef.current = requestAnimationFrame(loop);
+          if (!document.hidden) animFrameRef.current = requestAnimationFrame(loop);
           return;
         }
 
