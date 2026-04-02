@@ -45,40 +45,41 @@ export default function Index() {
 
   const loopFnRef = useRef<(() => void) | null>(null);
 
-  const resumeLoop = useCallback(() => {
-    if (loopFnRef.current) {
-      animFrameRef.current = requestAnimationFrame(loopFnRef.current);
-    }
-  }, []);
-
-  // Timer (shows observed time, excluding paused)
+  // Timer
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => {
-      const total = Date.now() - startTimeRef.current - pausedMsRef.current;
+      const total = Date.now() - startTimeRef.current;
       setElapsed(Math.floor(total / 1000));
     }, 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
 
-  // Pause detection when tab is hidden
+  // When tab is hidden, rAF stops — use setInterval fallback
   useEffect(() => {
     const handler = () => {
       if (!isRunningRef.current) return;
       if (document.hidden) {
-        hiddenAtRef.current = Date.now();
+        // Tab hidden: start a setInterval fallback to keep processing
         cancelAnimationFrame(animFrameRef.current);
-      } else {
-        if (hiddenAtRef.current > 0) {
-          pausedMsRef.current += Date.now() - hiddenAtRef.current;
-          hiddenAtRef.current = 0;
+        if (!fallbackIntervalRef.current && loopFnRef.current) {
+          const fn = loopFnRef.current;
+          fallbackIntervalRef.current = setInterval(fn, 100);
         }
-        resumeLoop();
+      } else {
+        // Tab visible: stop fallback, resume rAF
+        if (fallbackIntervalRef.current) {
+          clearInterval(fallbackIntervalRef.current);
+          fallbackIntervalRef.current = null;
+        }
+        if (loopFnRef.current) {
+          animFrameRef.current = requestAnimationFrame(loopFnRef.current);
+        }
       }
     };
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [resumeLoop]);
+  }, []);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
