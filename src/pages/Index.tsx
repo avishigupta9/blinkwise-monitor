@@ -28,8 +28,7 @@ export default function Index() {
   const startTimeRef = useRef<number>(0);
   const lastAlertRef = useRef<Record<string, number>>({});
 
-  const pausedMsRef = useRef<number>(0);
-  const hiddenAtRef = useRef<number>(0);
+  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRunningRef = useRef(false);
 
   const [isRunning, setIsRunning] = useState(false);
