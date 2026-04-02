@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Eye, Play, Square, Timer, Camera, CameraOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/MetricCard";
