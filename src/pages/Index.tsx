@@ -28,8 +28,7 @@ export default function Index() {
   const startTimeRef = useRef<number>(0);
   const lastAlertRef = useRef<Record<string, number>>({});
 
-  const pausedMsRef = useRef<number>(0);
-  const hiddenAtRef = useRef<number>(0);
+  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRunningRef = useRef(false);
 
   const [isRunning, setIsRunning] = useState(false);
@@ -46,40 +45,41 @@ export default function Index() {
 
   const loopFnRef = useRef<(() => void) | null>(null);
 
-  const resumeLoop = useCallback(() => {
-    if (loopFnRef.current) {
-      animFrameRef.current = requestAnimationFrame(loopFnRef.current);
-    }
-  }, []);
-
-  // Timer (shows observed time, excluding paused)
+  // Timer
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => {
-      const total = Date.now() - startTimeRef.current - pausedMsRef.current;
+      const total = Date.now() - startTimeRef.current;
       setElapsed(Math.floor(total / 1000));
     }, 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
 
-  // Pause detection when tab is hidden
+  // When tab is hidden, rAF stops — use setInterval fallback
   useEffect(() => {
     const handler = () => {
       if (!isRunningRef.current) return;
       if (document.hidden) {
-        hiddenAtRef.current = Date.now();
+        // Tab hidden: start a setInterval fallback to keep processing
         cancelAnimationFrame(animFrameRef.current);
-      } else {
-        if (hiddenAtRef.current > 0) {
-          pausedMsRef.current += Date.now() - hiddenAtRef.current;
-          hiddenAtRef.current = 0;
+        if (!fallbackIntervalRef.current && loopFnRef.current) {
+          const fn = loopFnRef.current;
+          fallbackIntervalRef.current = setInterval(fn, 100);
         }
-        resumeLoop();
+      } else {
+        // Tab visible: stop fallback, resume rAF
+        if (fallbackIntervalRef.current) {
+          clearInterval(fallbackIntervalRef.current);
+          fallbackIntervalRef.current = null;
+        }
+        if (loopFnRef.current) {
+          animFrameRef.current = requestAnimationFrame(loopFnRef.current);
+        }
       }
     };
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [resumeLoop]);
+  }, []);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
@@ -116,8 +116,6 @@ export default function Index() {
       await initFaceLandmarker();
       blinkStateRef.current = createBlinkState();
       startTimeRef.current = Date.now();
-      pausedMsRef.current = 0;
-      hiddenAtRef.current = 0;
       lastAlertRef.current = {};
       setBlinkCount(0);
       setBlinkRate(0);
@@ -130,11 +128,9 @@ export default function Index() {
       isRunningRef.current = true;
 
       const loop = () => {
-        if (document.hidden) return;
-
         const video = videoRef.current;
         if (!video || video.readyState < 2) {
-          animFrameRef.current = requestAnimationFrame(loop);
+          if (!document.hidden) animFrameRef.current = requestAnimationFrame(loop);
           return;
         }
 
@@ -167,7 +163,9 @@ export default function Index() {
           }
         }
 
-        animFrameRef.current = requestAnimationFrame(loop);
+        if (!document.hidden) {
+          animFrameRef.current = requestAnimationFrame(loop);
+        }
       };
 
       loopFnRef.current = loop;
@@ -183,11 +181,15 @@ export default function Index() {
 
   const stopSession = useCallback(async () => {
     cancelAnimationFrame(animFrameRef.current);
+    if (fallbackIntervalRef.current) {
+      clearInterval(fallbackIntervalRef.current);
+      fallbackIntervalRef.current = null;
+    }
     setIsRunning(false);
     isRunningRef.current = false;
     loopFnRef.current = null;
 
-    const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), pausedMsRef.current);
+    const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), 0);
     setSummary(s);
     setShowSummary(true);
 
