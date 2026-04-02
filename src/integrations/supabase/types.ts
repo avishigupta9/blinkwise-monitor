@@ -14,7 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      session_reports: {
+        Row: {
+          avg_rate: number
+          created_at: string
+          duration: number
+          id: string
+          interpretation: string
+          max_rate: number
+          min_rate: number
+          percent_below_healthy: number
+          total_blinks: number
+        }
+        Insert: {
+          avg_rate: number
+          created_at?: string
+          duration: number
+          id?: string
+          interpretation: string
+          max_rate: number
+          min_rate: number
+          percent_below_healthy: number
+          total_blinks: number
+        }
+        Update: {
+          avg_rate?: number
+          created_at?: string
+          duration?: number
+          id?: string
+          interpretation?: string
+          max_rate?: number
+          min_rate?: number
+          percent_below_healthy?: number
+          total_blinks?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
