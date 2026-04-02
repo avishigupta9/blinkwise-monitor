@@ -23,12 +23,12 @@ export default function Index() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const animFrameRef = useRef<number>(0);
+  const processingTrackRef = useRef<MediaStreamTrack | null>(null);
+  const frameReaderRef = useRef<ReadableStreamDefaultReader<any> | null>(null);
   const blinkStateRef = useRef<BlinkState>(createBlinkState());
   const startTimeRef = useRef<number>(0);
   const lastAlertRef = useRef<Record<string, number>>({});
-
-  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastUiUpdateRef = useRef<number>(0);
   const isRunningRef = useRef(false);
 
   const [isRunning, setIsRunning] = useState(false);
@@ -43,9 +43,12 @@ export default function Index() {
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [showSummary, setShowSummary] = useState(false);
 
-  const loopFnRef = useRef<(() => void) | null>(null);
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const sec = (s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  };
 
-  // Timer
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => {
@@ -55,37 +58,47 @@ export default function Index() {
     return () => clearInterval(interval);
   }, [isRunning]);
 
-  // When tab is hidden, rAF stops — use setInterval fallback
-  useEffect(() => {
-    const handler = () => {
-      if (!isRunningRef.current) return;
-      if (document.hidden) {
-        // Tab hidden: start a setInterval fallback to keep processing
-        cancelAnimationFrame(animFrameRef.current);
-        if (!fallbackIntervalRef.current && loopFnRef.current) {
-          const fn = loopFnRef.current;
-          fallbackIntervalRef.current = setInterval(fn, 100);
-        }
-      } else {
-        // Tab visible: stop fallback, resume rAF
-        if (fallbackIntervalRef.current) {
-          clearInterval(fallbackIntervalRef.current);
-          fallbackIntervalRef.current = null;
-        }
-        if (loopFnRef.current) {
-          animFrameRef.current = requestAnimationFrame(loopFnRef.current);
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
+  const syncUiState = useCallback((currentEAR: number, rollingRate: number, now: number) => {
+    const shouldSync = now - lastUiUpdateRef.current >= 120;
+    if (!shouldSync) return;
+
+    lastUiUpdateRef.current = now;
+    setEar(currentEAR);
+    setBlinkCount(blinkStateRef.current.blinkCount);
+    setBlinkRate(Math.round(rollingRate * 10) / 10);
   }, []);
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60).toString().padStart(2, "0");
-    const sec = (s % 60).toString().padStart(2, "0");
-    return `${m}:${sec}`;
-  };
+  const applyRuleState = useCallback((rollingRate: number, now: number) => {
+    const rule = evaluateRules(rollingRate, blinkStateRef.current, now);
+    if (rule) {
+      setStatus(rule.status);
+      const lastTime = lastAlertRef.current[rule.status] || 0;
+      if (now - lastTime > 60000) {
+        lastAlertRef.current[rule.status] = now;
+        setNotifications((prev) => [
+          { id: now, result: rule, time: new Date() },
+          ...prev.slice(0, 19),
+        ]);
+      }
+      return;
+    }
+
+    setStatus("normal");
+  }, []);
+
+  const analyzeFrame = useCallback((source: Parameters<typeof detectLandmarks>[0], timestamp: number) => {
+    const now = Date.now();
+    const result = detectLandmarks(source, timestamp);
+
+    if (!result?.faceLandmarks?.length) return;
+
+    const landmarks = result.faceLandmarks[0];
+    const currentEAR = calculateEAR(landmarks);
+    const { rollingRate } = processFrame(currentEAR, blinkStateRef.current, now);
+
+    syncUiState(currentEAR, rollingRate, now);
+    applyRuleState(rollingRate, now);
+  }, [applyRuleState, syncUiState]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -104,10 +117,67 @@ export default function Index() {
   }, []);
 
   const stopCamera = useCallback(() => {
+    frameReaderRef.current?.cancel().catch(() => undefined);
+    frameReaderRef.current = null;
+
+    processingTrackRef.current?.stop();
+    processingTrackRef.current = null;
+
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraReady(false);
   }, []);
+
+  const startVideoElementLoop = useCallback(() => {
+    const loop = () => {
+      if (!isRunningRef.current) return;
+
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) {
+        requestAnimationFrame(loop);
+        return;
+      }
+
+      analyzeFrame(video, performance.now());
+      requestAnimationFrame(loop);
+    };
+
+    requestAnimationFrame(loop);
+  }, [analyzeFrame]);
+
+  const startTrackProcessorLoop = useCallback(async (track: MediaStreamTrack) => {
+    try {
+      const ProcessorCtor = window.MediaStreamTrackProcessor as
+        | (new (init: { track: MediaStreamTrack }) => { readable: ReadableStream<any> })
+        | undefined;
+
+      if (!ProcessorCtor) {
+        startVideoElementLoop();
+        return;
+      }
+
+      const processor = new ProcessorCtor({ track });
+      const reader = processor.readable.getReader();
+      frameReaderRef.current = reader;
+
+      while (isRunningRef.current) {
+        const { value, done } = await reader.read();
+        if (done || !value || !isRunningRef.current) break;
+
+        try {
+          const ts = typeof value.timestamp === "number" ? value.timestamp / 1000 : performance.now();
+          analyzeFrame(value, ts);
+        } finally {
+          if (typeof value.close === "function") value.close();
+        }
+      }
+    } catch (error) {
+      console.error("Background processing fallback:", error);
+      if (isRunningRef.current) {
+        startVideoElementLoop();
+      }
+    }
+  }, [analyzeFrame, startVideoElementLoop]);
 
   const startSession = useCallback(async () => {
     setIsLoading(true);
@@ -117,6 +187,7 @@ export default function Index() {
       blinkStateRef.current = createBlinkState();
       startTimeRef.current = Date.now();
       lastAlertRef.current = {};
+      lastUiUpdateRef.current = 0;
       setBlinkCount(0);
       setBlinkRate(0);
       setEar(0);
@@ -127,73 +198,26 @@ export default function Index() {
       setIsRunning(true);
       isRunningRef.current = true;
 
-      const loop = () => {
-        const video = videoRef.current;
-        if (!video || video.readyState < 2) {
-          if (!document.hidden) animFrameRef.current = requestAnimationFrame(loop);
-          return;
-        }
-
-        const now = Date.now();
-        const result = detectLandmarks(video, performance.now());
-
-        if (result && result.faceLandmarks && result.faceLandmarks.length > 0) {
-          const landmarks = result.faceLandmarks[0];
-          const currentEAR = calculateEAR(landmarks);
-          const { rollingRate } = processFrame(currentEAR, blinkStateRef.current, now);
-
-          setEar(currentEAR);
-          setBlinkCount(blinkStateRef.current.blinkCount);
-          setBlinkRate(Math.round(rollingRate * 10) / 10);
-
-          const rule = evaluateRules(rollingRate, blinkStateRef.current, now);
-          if (rule) {
-            setStatus(rule.status);
-            // Cooldown: 60s per alert type
-            const lastTime = lastAlertRef.current[rule.status] || 0;
-            if (now - lastTime > 60000) {
-              lastAlertRef.current[rule.status] = now;
-              setNotifications((prev) => [
-                { id: now, result: rule, time: new Date() },
-                ...prev.slice(0, 19),
-              ]);
-            }
-          } else {
-            setStatus("normal");
-          }
-        }
-
-        if (!document.hidden) {
-          animFrameRef.current = requestAnimationFrame(loop);
-        }
-      };
-
-      loopFnRef.current = loop;
-
-      // Small delay for camera warmup
-      setTimeout(() => {
-        animFrameRef.current = requestAnimationFrame(loop);
-      }, 500);
+      const baseTrack = streamRef.current?.getVideoTracks()[0] ?? null;
+      if (baseTrack) {
+        processingTrackRef.current = baseTrack.clone();
+        void startTrackProcessorLoop(processingTrackRef.current);
+      } else {
+        startVideoElementLoop();
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [startCamera]);
+  }, [startCamera, startTrackProcessorLoop, startVideoElementLoop]);
 
   const stopSession = useCallback(async () => {
-    cancelAnimationFrame(animFrameRef.current);
-    if (fallbackIntervalRef.current) {
-      clearInterval(fallbackIntervalRef.current);
-      fallbackIntervalRef.current = null;
-    }
     setIsRunning(false);
     isRunningRef.current = false;
-    loopFnRef.current = null;
 
     const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), 0);
     setSummary(s);
     setShowSummary(true);
 
-    // Save session report to database
     await supabase.from("session_reports").insert({
       duration: s.duration,
       total_blinks: s.totalBlinks,

@@ -212,7 +212,7 @@ export async function initFaceLandmarker(): Promise<FaceLandmarker> {
     baseOptions: {
       modelAssetPath:
         "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-      delegate: "GPU",
+      delegate: "CPU",
     },
     runningMode: "VIDEO",
     numFaces: 1,
@@ -224,12 +224,12 @@ export async function initFaceLandmarker(): Promise<FaceLandmarker> {
 }
 
 export function detectLandmarks(
-  video: HTMLVideoElement,
+  source: Parameters<FaceLandmarker["detectForVideo"]>[0],
   timestamp: number
 ): FaceLandmarkerResult | null {
   if (!faceLandmarker) return null;
   try {
-    return faceLandmarker.detectForVideo(video, timestamp);
+    return faceLandmarker.detectForVideo(source, timestamp);
   } catch {
     return null;
   }
