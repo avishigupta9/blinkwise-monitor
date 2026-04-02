@@ -147,9 +147,13 @@ export default function Index() {
 
   const startTrackProcessorLoop = useCallback(async (track: MediaStreamTrack) => {
     try {
-      const ProcessorCtor = window.MediaStreamTrackProcessor as
-        | (new (init: { track: MediaStreamTrack }) => { readable: ReadableStream<any> })
-        | undefined;
+      const ProcessorCtor = (
+        window as Window & {
+          MediaStreamTrackProcessor?: new (init: { track: MediaStreamTrack }) => {
+            readable: ReadableStream<any>;
+          };
+        }
+      ).MediaStreamTrackProcessor;
 
       if (!ProcessorCtor) {
         startVideoElementLoop();
