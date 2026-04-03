@@ -43,6 +43,7 @@ export default function Index() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [showSummary, setShowSummary] = useState(false);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, "0");
