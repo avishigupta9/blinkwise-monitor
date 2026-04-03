@@ -16,37 +16,52 @@ export type Database = {
     Tables: {
       session_reports: {
         Row: {
+          age_group: string | null
           avg_rate: number
           created_at: string
+          daily_screen_time: string | null
           duration: number
           id: string
           interpretation: string
+          lighting_condition: string | null
           max_rate: number
           min_rate: number
           percent_below_healthy: number
+          screen_use_before_test: string | null
           total_blinks: number
+          wears_glasses: boolean | null
         }
         Insert: {
+          age_group?: string | null
           avg_rate: number
           created_at?: string
+          daily_screen_time?: string | null
           duration: number
           id?: string
           interpretation: string
+          lighting_condition?: string | null
           max_rate: number
           min_rate: number
           percent_below_healthy: number
+          screen_use_before_test?: string | null
           total_blinks: number
+          wears_glasses?: boolean | null
         }
         Update: {
+          age_group?: string | null
           avg_rate?: number
           created_at?: string
+          daily_screen_time?: string | null
           duration?: number
           id?: string
           interpretation?: string
+          lighting_condition?: string | null
           max_rate?: number
           min_rate?: number
           percent_below_healthy?: number
+          screen_use_before_test?: string | null
           total_blinks?: number
+          wears_glasses?: boolean | null
         }
         Relationships: []
       }
