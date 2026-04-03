@@ -384,6 +384,11 @@ export default function Index() {
         </p>
       </main>
 
+      <PostTestQuestionnaire
+        open={showQuestionnaire}
+        onSubmit={handleQuestionnaireSubmit}
+      />
+
       <SessionSummaryDialog
         summary={summary}
         open={showSummary}
