@@ -216,26 +216,38 @@ export default function Index() {
     }
   }, [startCamera, startTrackProcessorLoop, startVideoElementLoop]);
 
-  const stopSession = useCallback(async () => {
+  const stopSession = useCallback(() => {
     setIsRunning(false);
     isRunningRef.current = false;
 
     const s = generateSummary(blinkStateRef.current, startTimeRef.current, Date.now(), 0);
     setSummary(s);
-    setShowSummary(true);
-
-    await supabase.from("session_reports").insert({
-      duration: s.duration,
-      total_blinks: s.totalBlinks,
-      avg_rate: s.avgRate,
-      min_rate: s.minRate,
-      max_rate: s.maxRate,
-      percent_below_healthy: s.percentBelowHealthy,
-      interpretation: s.interpretation,
-    });
-
     stopCamera();
+    setShowQuestionnaire(true);
   }, [stopCamera]);
+
+  const handleQuestionnaireSubmit = useCallback(async (data: QuestionnaireData) => {
+    setShowQuestionnaire(false);
+
+    if (summary) {
+      await supabase.from("session_reports").insert({
+        duration: summary.duration,
+        total_blinks: summary.totalBlinks,
+        avg_rate: summary.avgRate,
+        min_rate: summary.minRate,
+        max_rate: summary.maxRate,
+        percent_below_healthy: summary.percentBelowHealthy,
+        interpretation: summary.interpretation,
+        age_group: data.ageGroup,
+        daily_screen_time: data.dailyScreenTime,
+        screen_use_before_test: data.screenUseBeforeTest,
+        wears_glasses: data.wearsGlasses,
+        lighting_condition: data.lightingCondition,
+      });
+    }
+
+    setShowSummary(true);
+  }, [summary]);
 
   return (
     <div className="min-h-screen bg-background">
