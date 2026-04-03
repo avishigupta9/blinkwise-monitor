@@ -27,7 +27,7 @@ interface Props {
 const AGE_OPTIONS = ["Under 13", "13–15", "16–18", "18+"];
 const SCREEN_TIME_OPTIONS = ["<2 hours", "2–4 hours", "4–6 hours", "6+ hours"];
 const BEFORE_TEST_OPTIONS = ["<30 min", "30–60 min", "1–2 hours", "2+ hours"];
-const LIGHTING_OPTIONS = ["Bright", "Normal indoor", "Dim"];
+const LIGHTING_OPTIONS = ["Bright", "Normal", "Dim", "Dark"];
 
 export function PostTestQuestionnaire({ open, onSubmit }: Props) {
   const [ageGroup, setAgeGroup] = useState("");
