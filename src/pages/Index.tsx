@@ -6,6 +6,7 @@ import { MetricCard } from "@/components/MetricCard";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { NotificationPanel, type Notification } from "@/components/NotificationPanel";
 import { SessionSummaryDialog } from "@/components/SessionSummaryDialog";
+import { PostTestQuestionnaire, type QuestionnaireData } from "@/components/PostTestQuestionnaire";
 import {
   initFaceLandmarker,
   detectLandmarks,
